@@ -1,0 +1,19 @@
+cross_val_parts: 5
+cross_val_repeats: 5
+snotel_path: "results/snotel_lrs.pkl"
+scaler_path: "results/multiscaler.pkl"
+
+test_data:
+  type: "timeseries"
+  workers: 10
+  batch_size: 2048
+
+model:
+  type: "mlp_sum_res"
+  in_features: 40
+  layers: [256, 128, 64, 3]
+  mlp_dropout: 0
+  weights: results/mlp_sumres.pth
+
+predict:
+  path: results/predict_submission_mlp_sumres_cv.csv

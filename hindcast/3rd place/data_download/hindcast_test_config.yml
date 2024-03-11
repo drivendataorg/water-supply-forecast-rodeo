@@ -1,0 +1,15 @@
+# Config file for bulk downloading feature data for Hindcast test years
+# To be used with `python -m wsfr_download bulk <path-to-this-file>`
+# See `python -m wsfr_download bulk --help` for details.
+#
+# To bulk download feature data for training, copy this file and set the
+# forecast years and data sources that you need.
+
+forecast_years: [2005, 2007, 2009, 2011, 2013, 2015, 2017, 2019, 2021, 2023]
+skip_existing: true
+data_sources:
+  # Antecedent streamflow
+  - name: usgs_streamflow
+  # Snowpack
+  - name: snotel
+  - name: cdec
