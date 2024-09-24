@@ -12,7 +12,7 @@ This repository is based off of https://github.com/drivendataorg/water-supply-fo
 ```
 .
 ├── README.md                             <- You are here!
-├── Streamflow_Hindcast_Report.pdf        <- Reference for the solution
+├── reports/report.pdf                    <- Reference for the solution
 ├── requirements-train.txt                <- File with the required packages to train the models
 ├── data                                  <- Directory with base data for running inference on the trained models
 ├── data_download                         <- Directory with code required for downloading raw data
