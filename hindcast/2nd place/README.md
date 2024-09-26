@@ -7,41 +7,41 @@ Team: ck-ua
 
 ## Summary
 
-Our approach centered on using a Multi-Layer Perceptron (MLP) neural network 
+Our approach centered on using a Multi-Layer Perceptron (MLP) neural network
 with four layers, which proved to be the most effective within the given
-constraints. 
-The network was constructed to simultaneously predict the 10th, 50th, and 90th 
-percentile targets of water volume distribution. We experimented with various 
-network enhancements and dropout regularization but observed no substantial 
+constraints.
+The network was constructed to simultaneously predict the 10th, 50th, and 90th
+percentile targets of water volume distribution. We experimented with various
+network enhancements and dropout regularization but observed no substantial
 improvement in the model's performance.
 
-For our data sources, we relied on the NRCS and RFCs monthly naturalized flow, 
+For our data sources, we relied on the NRCS and RFCs monthly naturalized flow,
 USGS streamflow, and NRCS SNOTEL data, all of which were meticulously normalized
-and encoded to serve as features for our training process. We propose a novel 
-approach for using SNOTEL data by training specialized RANSAC mini-models for 
-each site separately. For each of these mini-models the list of the used SNOTEL 
+and encoded to serve as features for our training process. We propose a novel
+approach for using SNOTEL data by training specialized RANSAC mini-models for
+each site separately. For each of these mini-models the list of the used SNOTEL
 stations are selected by heuristic approach.
 
-Our validation strategy involved a repeated k-fold cross-validation based on 
-years, to both avoid overfitting and to reinforce the robustness of our model. 
-This led us to train 25 models with distinct training years and, upon inference, 
-we employed an ensemble of all models to determine the median value for 
-predictions of each percentile. We also employed data augmentation due to the 
-limited size of our training dataset, which allowed us to artificially expand 
+Our validation strategy involved a repeated k-fold cross-validation based on
+years, to both avoid overfitting and to reinforce the robustness of our model.
+This led us to train 25 models with distinct training years and, upon inference,
+we employed an ensemble of all models to determine the median value for
+predictions of each percentile. We also employed data augmentation due to the
+limited size of our training dataset, which allowed us to artificially expand
 our sample set.
 
 Inference result file used as-is without any modifications for the submission.
 
 ## Setup
 
-We used the Ubuntu 23.10 OS for training/inference. 
+We used the Ubuntu 23.10 OS for training/inference.
 
 ### Environment
 
-> [!NOTE]  
-> The provided `environment.yml` requirements file may not resolve for OSes other than Linux. 
+> [!NOTE]
+> The provided `environment.yml` requirements file may not resolve for OSes other than Linux.
 
-1. Install conda (or mamba) python package manager. 
+1. Install conda (or mamba) python package manager.
 2. Install the required python packages from `environment.yml` file using conda or mamba package manager.
 For example, you can do it with next command:
 
@@ -83,8 +83,8 @@ Inference time: 27 s
 
 The following instructions use `src/` as the working directory.
 
-1. Need to download SNOTEL and USGS Streamflow data for all available years that 
-allowed for training in `src/data folder`. Please use the competition's [`wsfr_download` tool](https://github.com/drivendataorg/water-supply-forecast-rodeo-runtime?tab=readme-ov-file#data-download) (installed as part of the requirements) with next files:
+1. Need to download SNOTEL and USGS Streamflow data for all available years that
+allowed for training in `src/data` folder. Please use the competition's [`wsfr_download` tool](https://github.com/drivendataorg/water-supply-forecast-rodeo-runtime?tab=readme-ov-file#data-download) (installed as part of the requirements) with next files:
 
     ```bash
     python -m wsfr_download bulk data_download/hindcast_train_config_snotel.yml
@@ -137,9 +137,9 @@ allowed for training in `src/data folder`. Please use the competition's [`wsfr_d
     ./train.sh
     ```
 
-    The script not used any pretrained data-source models. 
+    The script not used any pretrained data-source models.
     Training process not require the network access except for data downloading at step #1.
-    Model weights will be saved in `results` folder. 
+    Model weights will be saved in `results` folder.
     All weights model files require only approx. 5 MB of disk space.
 
 ## Run inference
@@ -151,7 +151,7 @@ The following instructions use `src/` as the working directory. To run inference
     - `test_monthly_naturalized_flow.csv` -> `src/data/test_monthly_naturalized_flow.csv`
 
 
-2. Need to download SNOTEL and USGS Streamflow data for all available test years to the `data/` folder. 
+2. Need to download SNOTEL and USGS Streamflow data for all available test years to the `data/` folder.
 Please use the competition's `wsfr_download` tool with next files:
 
     ```bash
@@ -201,7 +201,7 @@ Please use the competition's `wsfr_download` tool with next files:
     ./predict.sh
     ```
 
-    The script automatically loaded all needed files and performed end-to-end inference process. 
+    The script automatically loaded all needed files and performed end-to-end inference process.
     Results of the inference will be saved in the `results/predict_submission_mlp_sumres_cv.csv` file.
     No any additional preprocessing or postprocessing steps are required.
     The script doesn't generate any intermediate files during inference process except the final results in .csv format.
