@@ -70,7 +70,14 @@ Inference time: 1m 43s for all sites at 2024-01-01
 
 1. Set the `src/` folder as the working directory.
 
-2. Need to download SNOTEL and USGS Streamflow data for all available years that
+2. Download the following files from the competition into the `src/data` folder:
+
+    - `metadata.csv`
+    - `forecast_train_monthly_naturalized_flow.csv`
+    - `forecast_train.csv`
+    - `geospatial.gpkg`
+
+3. Need to download SNOTEL and USGS Streamflow data for all available years that
 allowed for training in `data/` folder. Please run script `download_train_data.sh` to download all training data automatically.
 After downloading the data you should receive next directory structure in `src` folder:
     ```
@@ -111,12 +118,6 @@ After downloading the data you should receive next directory structure in `src` 
     │   └── optimizers
     └── results
     ```
-
-3. Download the following files from the competition into the `src/data` folder:
-
-    - `metadata.csv`
-    - `forecast_train_monthly_naturalized_flow.csv`
-    - `forecast_train.csv`
 
 4. Remove any existing trained model or submission result files from `results/forecast` folder.
 
