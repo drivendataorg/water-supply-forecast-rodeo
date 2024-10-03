@@ -1,0 +1,11 @@
+.DS_Store
+tmp/
+__pycache__
+
+data/*/*
+!data/*/.placeholder
+!data/meta/*
+!data/raw/*
+!data/sub/*
+
+runs/
