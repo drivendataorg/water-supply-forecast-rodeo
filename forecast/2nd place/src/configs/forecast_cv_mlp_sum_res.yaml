@@ -1,0 +1,54 @@
+cross_val_parts: 5
+cross_val_repeats: 5
+snotel_path: "results/forecast/snotel_lrs.pkl"
+scaler_path: "results/forecast/multiscaler.pkl"
+
+train_data:
+  type: "timeseries"
+  batch_size: 2048
+  workers: 10
+  shuffle: True
+  drop_last: True
+
+val_data:
+  type: "timeseries"
+  batch_size: 512
+  workers: 10
+
+model:
+  type: "mlp_sum_res"
+  in_features: 40
+  layers: [256, 128, 64, 3]
+  mlp_dropout: 0
+
+train:
+  epochs: 120
+#  lr_finder: False
+#  optimizer:
+#    type: sgd
+#    lr: !!float 1e-1
+  optimizer:
+    type: adam
+    lr: !!float 0.001
+#    betas: [0.9, 0.99]
+#    eps: !!float 1e-6
+    weight_decay: !!float 0.00
+  losses:
+#    - ["out", "percentile_square", 0.00001]
+    - ["out", "percentile", 1]
+
+  early_stop: 12
+#  grad_clip: 0.5
+  reduce_lr:
+    patience: 3
+    factor: 0.1
+#  cosine:
+#    T_0: 10
+#    T_mult: 1
+#    eta_min: !!float 1e-5
+  checkpoints: results/forecast/checkpoints
+  checkpoint_monitor: val_scaled_percentile
+  weights_path: results/forecast/mlp_sumres.pth
+  val_prediction: results/forecast/val_sumres_prediction.csv
+  log_path: results/logs/forecast/mlp
+  log_name: forecast_mlp_sumres

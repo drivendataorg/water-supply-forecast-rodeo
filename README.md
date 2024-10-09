@@ -34,9 +34,23 @@ In this stage, solvers made code submissions that ran inference on a hold-out se
 Place | Team or User | Score | Summary of Model
 --- | --- | ---   | ---
 1   | rasyidstat | 87.82 | Ensemble of LightGBM models with models per target quantile, trained using Tweedie loss for 50th quantile and quantile loss for 10th and 90th. Data sources were SNOTEL snow water equivalent, cumulative precipitation, USGS and USBR observed streamflow, and basin geographic attributes. Generated synthetic data during training.
-2   | ck-ua | 90.78 | Ensemble of multilayer perceptron models with four layers with multiple outputs for the 3 quantiles, trained with quantile loss. Data sources were antecedent monthly flow, USGS observed streamflow, SNOTEL snow water equivalent, and precipitation. Snow water equivalent and precipitation aggregated and normalized across stations with per-site RANSAC linear models. 
+2   | ck-ua | 90.78 | Ensemble of multilayer perceptron models with four layers with multiple outputs for the 3 quantiles, trained with quantile loss. Data sources were antecedent monthly flow, USGS observed streamflow, SNOTEL snow water equivalent, and precipitation. Snow water equivalent and precipitation aggregated and normalized across stations with per-site RANSAC linear models.
 3   | oshbocker | 101.59 | Ensemble of CatBoost models targetting both monthly and seasonal streamflow, with models per quantile trained using quantile loss. Data sources were antecedent monthly flow, USGS observed streamflow, SNOTEL and CDEC snow water equivalent, Copernicus GLO elevations, and ACIS observed temperature and precipitation.
 
 Code and reports for the Hindcast Stage can be found in the [`hindcast/`](./hindcast/) subdirectory. For each winner, see the `reports/` subdirectory for their model report and additional solution documentation.
 
 **Winners Announcement: ["Meet the Winners of the Water Supply Forecast Rodeo Hindcast Stage"](https://drivendata.co/blog/water-supply-hindcast-winners)**
+
+## Forecast Stage
+
+In this stage, solvers submitted code submissions that DrivenData then executed on to issue forecasts for the 2024 season on four scheduled issue dates each month from January through July 2024. Winners were selected based on the lowest [averaged mean quantile loss](https://www.drivendata.org/competitions/259/reclamation-water-supply-forecast/page/827/#primary-metric-quantile-loss) of their forecasts.
+
+Place | Team or User | Score | Summary of Model
+--- | --- | ---   | ---
+1   | oshbocker | 56.83 | Ensemble of CatBoost models targetting both monthly and seasonal streamflow, with models per quantile trained using quantile loss. Data sources were: antecedent monthly flow; USGS observed daily streamflow; snow water equivalent from SNOTEL, CDEC and SWANN; Copernicus GLO elevations; ACIS observed temperature and precipitation.
+2   | ck-ua | 56.91 | Ensemble of multilayer perceptron models with four layers with multiple outputs for the 3 quantiles, trained with quantile loss. Data sources were antecedent monthly flow, USGS observed streamflow, SNOTEL snow water equivalent, and precipitation. Snow water equivalent and precipitation aggregated and normalized across stations with per-site RANSAC linear models.
+3   | rasyidstat | 59.16 | Ensemble of LightGBM models with models per target quantile, trained using Tweedie loss for 50th quantile and quantile loss for 10th and 90th. Data sources were SNOTEL snow water equivalent, cumulative precipitation, USGS and USBR observed streamflow, basin geographic attributes, and Palmer Drought Severity Index (PDSI). Generated synthetic data during training.
+
+Code and reports for the Forecast Stage can be found in the [`forecast/`](./forecast/) subdirectory. For each winner, see the `reports/` subdirectory for their model report and additional solution documentation.
+
+**Winners Announcement: _coming soon_

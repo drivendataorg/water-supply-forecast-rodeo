@@ -1,9 +1,9 @@
-# Water Supply Forecast Rodeo Hindcast
+# Water Supply Forecast Rodeo Forecast
 
 This repository contains code to train models that predict the 0.1, 0.5, 0.9 quantiles of naturalized streamflow for stream sites
 in the Western United States.
 
-The repository also contains a Docker runtime that uses the trained models to predict streamflow on a set of holdout years.
+The repository also contains a Docker runtime that uses the trained models to predict streamflow on unseen, near real-time data downloaded to the `data` directory.
 
 This repository is based off of https://github.com/drivendataorg/water-supply-forecast-rodeo-runtime
 
@@ -12,12 +12,12 @@ This repository is based off of https://github.com/drivendataorg/water-supply-fo
 ```
 .
 ├── README.md                             <- You are here!
-├── reports/report.pdf                    <- Reference for the solution
 ├── requirements-train.txt                <- File with the required packages to train the models
 ├── data                                  <- Directory with base data for running inference on the trained models
 ├── data_download                         <- Directory with code required for downloading raw data
 ├── data_reading                          <- Directory with helper code for reading raw data
 ├── runtime                               <- Code and Dockerfile for running inference workflow
+├── submission                            <- Directory for packaged submission artifacts
 └── submission_src                        <- Code to be packaged and run inferenece workflow
       └── feature_parameters              <- Directory for pre-computed feature paramaters calculated during training
       └── features                        <- Directory with helper code for generating feature data from raw data
@@ -26,7 +26,8 @@ This repository is based off of https://github.com/drivendataorg/water-supply-fo
          ├── feature_engineering.py       <- Code for end-to-end test feature generation
          ├── monthly_naturalized_flow.py  <- Code for creating naturalized flow features from NRCS data
          ├── snotel_deviation.py          <- Code for creating snow pack features from Snotel data
-         └── streamflow_deviation.py      <- Code fore creating streamflow features from USGS data
+         ├── streamflow_deviation.py      <- Code for creating streamflow features from USGS data
+         └── ua_swann_deviation.py        <- Code for creating features based on UA Swann esimates
       ├── models                          <- Directory for trained models
       ├── wsfr_download                   <- Directory with download code to be used in inference runtime
       ├── generate_predictions.py         <- Code to generate predictions and save them to a submission file
@@ -38,7 +39,8 @@ This repository is based off of https://github.com/drivendataorg/water-supply-fo
          ├── glo_elevations.py            <- Code for creating elevation features from GLO Copernicus data
          ├── monthly_naturalized_flow.py  <- Code for creating naturalized flow features from NRCS data
          ├── snotel_deviation.py          <- Code for creating snow pack features from Snotel data
-         └── streamflow_deviation.py      <- code fore creating streamflow features from USGS data
+         ├── streamflow_deviation.py      <- Code for creating streamflow features from USGS data
+         └── ua_swann_deviation.py        <- Code for creating features based on UA Swann esimates
     ├── models                            <- Directory for trained models
     ├── preprocessed_data                 <- Directory to store intermediate data files
     ├── train_data                        <- Directory to store data used for model training
@@ -47,24 +49,11 @@ This repository is based off of https://github.com/drivendataorg/water-supply-fo
     ├── train_model.py                    <- Code for end-to-end model training
     ├── train_monthly_model.py            <- Code to train the monthly Catboost models
     └── train_yearly_model.py             <- Code to train the yearly Catboost models
+
 ```
 
 ## Directions for running the solution end-to-end
 The steps below should be followed in order to reproduce the competition submission.
-
-### 0. Get competition data files
-
-Download the following competition data files and place them in `data/`:
-
-- `cdec_snow_stations.csv`
-- `cpc_climate_divisions.gpkg`
-- `geospatial.gpkg`
-- `metadata.csv`
-- `smoke_submission_format.csv`
-- `submission_format.csv`
-- `test_monthly_naturalized_flow.csv`
-- `train_monthly_naturalized_flow.csv`
-- `train.csv`
 
 ### 1. Requirements and installation
 
@@ -72,8 +61,8 @@ Requires Python 3.10. To install with the exact dependencies that will be used b
 
 ```bash
 pyenv install 3.10
-pyenv virtualenv 3.10 water-supply-hindcast
-pyenv activate water-supply-hindcast
+pyenv virtualenv 3.10 water-supply-forecast
+pyenv activate water-supply-forecast
 pip install -r ./data_download/requirements.txt
 pip install ./data_download/
 pip install ./data_reading/
@@ -81,15 +70,21 @@ pip install -r requirements-train.txt
 ```
 
 ### 2. Data Download
+Make sure the data files from the [DrivenData Water Supply Forecast Rodeo Data download](https://www.drivendata.org/competitions/259/reclamation-water-supply-forecast/data/) page are saved to the `training/train_data` directory, including the following:
+* forecast_train.csv
+* metadata.csv
+* geospatial.gpkg
+* submission_format.csv
+* forecast_train_monthly_naturalized_flow.csv
+* cdec_snow_stations.csv
 
 Download all train and test raw data using the `bulk` command. From the repository root as your working directory, run:
 
 ```bash
-WSFR_DATA_ROOT=training/train_data python -m wsfr_download bulk data_download/hindcast_train_config.yml
-python -m wsfr_download bulk data_download/hindcast_test_config.yml
+WSFR_DATA_ROOT=training/train_data python -m wsfr_download bulk data_download/forecast_train_config.yml
 ```
 
-The train data will be downloaded to the directory `training/train_data` and the test data will be downloaded to the `data` directory.
+The train data will be downloaded to the directory `training/train_data`.
 
 ### 3. Generate the train features file
 
@@ -141,4 +136,4 @@ make test-submission
 
 The code submission will be located at `submission/submission.zip`
 
-The submission file will be located at `submission/submission.csv`
+The submission file will be located in `submission/submission.csv`
