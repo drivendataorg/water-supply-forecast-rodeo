@@ -1,0 +1,17 @@
+norm_path: results/final/norm/norm.pkl
+timeseries_cache_path: results/final/timeseries/timeseries.pkl
+
+test_data:
+  type: "timeseries"
+  workers: 10
+  batch_size: 2048
+
+model:
+  type: "mlp_sum_res"
+  in_features: 45
+  layers: [ 286, 286, 286, 64, 3 ]
+  mlp_dropout: 0.1
+  weights: results/final/weights/mlp_sumres.pth
+
+predict:
+  path: results/final/final_predict_submission_mlp_sumres.csv

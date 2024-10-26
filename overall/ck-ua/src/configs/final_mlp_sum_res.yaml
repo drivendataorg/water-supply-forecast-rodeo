@@ -1,0 +1,59 @@
+cross_val_parts: 5
+cross_val_repeats: 1
+norm_path: results/final/norm/norm.pkl
+timeseries_cache_path: results/final/timeseries/timeseries.pkl
+
+train_data:
+  type: "timeseries"
+  batch_size: 2048
+  workers: 10
+  shuffle: True
+  drop_last: True
+
+val_data:
+  type: "timeseries"
+  batch_size: 512
+  workers: 10
+
+model:
+  type: "mlp_sum_res"
+  in_features: 45
+  layers: [ 286, 286, 286, 64, 3 ]
+  mlp_dropout: 0.1
+
+train:
+  epochs: 120
+#  lr_finder: False
+#  optimizer:
+#    type: sgd
+#    lr: !!float 1e-1
+#  optimizer:
+#    type: adam
+#    lr: !!float 0.001
+##    betas: [0.9, 0.99]
+##    eps: !!float 1e-6
+#    weight_decay: !!float 0.00
+  optimizer:
+    type: came
+    lr: !!float 1e-4
+#    weight_decay: !!float 1e-5
+#    betas: (0.9, 0.999, 0.9999)
+
+  losses:
+#    - ["out", "percentile_square", 0.00001]
+    - ["out", "percentile", 1]
+
+  early_stop: 12
+#  grad_clip: 0.5
+  reduce_lr:
+    patience: 3
+    factor: 0.1
+#  cosine:
+#    T_0: 10
+#    T_mult: 1
+#    eta_min: !!float 1e-5
+  checkpoints: results/checkpoints_final
+  checkpoint_monitor: val_scaled_percentile
+  weights_path: results/final/weights/mlp_sumres.pth
+  log_path: results/logs/final/mlp
+  log_name: final_mlp_sumres
