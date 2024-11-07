@@ -1,0 +1,13 @@
+# Code editor files
+*.idea
+
+# CatBoost files
+*catboost_info
+
+# Downloaded data files
+*training/preprocessed_data
+*training/train_data
+
+# Other
+*__pycache__
+*.DS_Store
