@@ -62,7 +62,7 @@ We use ensembles of LightGBM models with Tweedie loss for point forecast and qua
 3. Post-process CDEC metadata
     * Run `python -m src.meta.get_cdec_sites_basins` to generate pair between CDEC stations and forecast sites
 
-### Training
+## Training
 
 Run `train.sh` to train all nine models for all validation years (2004-2023). For each single experiment or config training model run, the output will be:
 
@@ -76,7 +76,7 @@ Run `train.sh` to train all nine models for all validation years (2004-2023). Fo
 
 To generate ensemble predictions from those models, you can refer to `notebooks/eval_cv.ipynb` which also report cross validation score for all 20 years along with each individual models.
 
-### Additional information
+## Additional information
 
 * As per 26th September 2024, new CDP API is fully operated ([source](https://forum.ecmwf.int/t/goodbye-legacy-climate-data-store-hello-new-climate-data-store-cds/6380)). If you are redownloading the data and using the new CDS, you can use `is_new_cds=True` in download and preprocessing functions of ERA5 and SEAS51 data
 * You also can update the directory for these data sources on `src/config.py`
@@ -85,7 +85,7 @@ To generate ensemble predictions from those models, you can refer to `notebooks/
 * `train_ext.sh` is used to extend CV training and evaluation from 1991 to 2003
 * `baseline_median.py` generates `data/sub/pred_median_dp.feather`, which is baseline median used to calculate relative skill score of averaged mean pinball loss
 
-### Explainability
+## Explainability
 
 To generate a report for a single issue date and location, you can use `generate_report` function from `explainability/report.py` file. This function requires feature input and models from the training process. It will generate explainability outputs such as:
 
@@ -105,7 +105,7 @@ losses)
 * Inference duration: less than 3 minute for a single issue date and 26 sites (not including
 data download time)
 
-### Optimization tips
+## Optimization tips
 
 There are ways to reduce training and processing time as follow:
 
