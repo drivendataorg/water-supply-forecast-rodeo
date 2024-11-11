@@ -1,0 +1,10 @@
+name: iamo-team
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - r-base=4.4.1
+  - gdal=3.9.3
+  - libgdal-netcdf=3.9.3
+  - pip:
+      - wsfr_download@git+https://github.com/drivendataorg/water-supply-forecast-rodeo-runtime.git#egg=pkg&subdirectory=data_download
