@@ -1,0 +1,8 @@
+# Model Training
+catboost==1.2.2
+lightgbm==4.3.0
+scikit-learn==1.4.1.post1
+
+# Explainability
+seaborn==0.13.1
+shap==0.45.0

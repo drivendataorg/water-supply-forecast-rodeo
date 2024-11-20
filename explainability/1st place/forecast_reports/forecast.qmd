@@ -1,0 +1,604 @@
+```{python "Setting site_id and issue_date from _variables.yml"}
+import yaml
+# Read the YAML file
+with open("_variables.yml", 'r') as file:
+    data = yaml.safe_load(file)
+    site_id = data.get('site')
+    issue_date = str(data.get('issue_date'))
+```
+
+
+```{python "Defining constants"}
+#| warning: False
+QUANTILES = [0.1, 0.5, 0.9]
+
+FEATURE_NAMES = [
+    'site_encoded',
+    'day_in_year',
+    'antecedent_flow',
+    'snotel_swe_conditional',
+    'swann_swe_conditional',
+    'swann_ppt_conditional',
+    'swann_ppt_unaccounted',
+]
+
+SHAP_FEATURES = [
+    'antecedent_flow',
+    'day_in_year',
+    'snotel_swe_conditional',
+    'swann_swe_conditional',
+    'swann_ppt_conditional',
+    'swann_ppt_unaccounted',
+]
+CUTOFF_YEAR = 2004
+CURRENT_YEAR = 2023
+
+```
+
+```{r "Setting options for R"}
+options(
+        # Suppress R initialization messages
+        startup.messages=FALSE,
+        message=FALSE,
+        warning=FALSE
+)
+
+# Suppress rpy2 initialization message
+if ("rpy2" %in% rownames(installed.packages())) {
+    suppressMessages(library(rpy2))
+}
+
+```
+
+```{python "Load Python libraries"}
+#| warning: False
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from plotnine import *
+import sys
+from pathlib import Path
+import pickle
+import shap
+sys.path.append('../src/')
+from data.snotel import compute_conditional_swe_date
+from util import post_process_quantiles
+import logging
+logging.getLogger('rpy2').setLevel(logging.ERROR)
+from shaprpy import explain
+```
+
+
+```{r "Loading R libraries"}
+#| message: False
+#| warning: False
+library(ggplot2)
+library(reticulate)
+library(patchwork)
+library(dplyr)
+library(waterfalls)
+
+current_color = 'darkblue'
+```
+\vspace{-40mm}
+
+# Forecast Communication Output
+
+
+```{python "Loading Data"}
+pre_processed_dir = Path('../pre-processed')
+with open(pre_processed_dir / 'models_2023.pkl', 'rb') as file:
+  results = pickle.load(file)
+models = results['models']
+cutoffs = results['cutoffs']
+features = pd.read_csv(pre_processed_dir / 'features.csv')
+features = features[features['forecast_year'] >= CUTOFF_YEAR]
+```
+
+```{python "Create date variables"}
+issue_date_dt = pd.to_datetime(issue_date)
+conditional_date = compute_conditional_swe_date(site_id, issue_date_dt)
+conditional_day = pd.to_datetime(conditional_date).strftime('%m-%d')
+conditional_day_in_year = pd.to_datetime(conditional_date).dayofyear
+
+if issue_date_dt.day == 1:
+    date_before = (issue_date_dt - pd.DateOffset(months=1)).replace(day=22)
+else:
+    date_before = issue_date_dt - pd.DateOffset(days=7)
+date_before = date_before.strftime('%Y-%m-%d')
+issue_day = issue_date_dt.strftime('%m-%d')
+```
+
+
+```{python "Create date features"}
+cat_type = pd.CategoricalDtype(categories=features['site_id'].unique(), ordered=False)
+features['site_encoded'] = features['site_id'].astype(cat_type)
+features['issue_day'] = pd.to_datetime(features['issue_date']).dt.strftime('%m-%d')
+features['issue_day_short'] = pd.to_datetime(features['issue_date']).dt.strftime('%-m-%-d')
+features['month'] = pd.to_datetime(features['issue_date']).dt.strftime('%m').astype(int)
+features['day_in_month'] = pd.to_datetime(features['issue_date']).dt.strftime('%d').astype(int)
+```
+
+
+```{python "Create reference data"}
+reference_years = list(range(CUTOFF_YEAR, CURRENT_YEAR))
+reference_data = features[features['forecast_year'].isin(reference_years)]
+reference_data = reference_data[reference_data['issue_day'] == issue_day]
+reference_data = reference_data[reference_data['site_id'] == site_id]
+```
+
+
+```{python "Subset site and issue date"}
+site_data = features[features['site_id'] == site_id]
+site_data = site_data[pd.to_datetime(site_data['issue_date']) <= issue_date_dt]
+site_data['issue_date'] = pd.to_datetime(site_data['issue_date'])
+
+site_data_current = site_data[(site_data['forecast_year'] == CURRENT_YEAR) &
+                              (site_data['issue_date'] <= issue_date_dt)]
+# don't want to have 2023 in historical data
+site_data = site_data[~(site_data['forecast_year'] == CURRENT_YEAR)]
+current_data = features[(features['site_id'] == site_id) & (features['issue_date'] == issue_date)]
+```
+
+```{python "Defining dates for x-axis"}
+x_axis_dates = ['2023-01-01', '2023-02-01', '2023-03-01',
+                '2023-04-01', '2023-05-01', '2023-06-01', '2023-07-01']
+x_axis_dates = pd.to_datetime(pd.Series(x_axis_dates))
+x_axis_dates_df = pd.DataFrame({'dates': x_axis_dates})
+x_axis_dates_df['day_in_year'] = x_axis_dates_df['dates'].dt.dayofyear
+x_axis_dates_df['issue_day'] = x_axis_dates_df['dates'].dt.strftime('%m-%d')
+x_axis_dates_df['month'] = x_axis_dates_df['dates'].dt.strftime('%b')
+x_axis_dates_df['month'] = x_axis_dates_df['dates'].dt.strftime('%b').str[0]
+```
+
+```{r "Define ggplot2 theme"}
+theme10 = theme(axis.text.x = element_text(size=10),
+                plot.title = element_text(size = 10),
+                axis.title = element_text(size = 10),
+                axis.title.x = element_text(size = 10),
+                axis.title.y = element_text(size = 10))
+
+```
+
+## How forecast and uncertainty bounds evolved in 2023
+
+```{python "Define Prediction Function"}
+def predict_models(models, new_data, cp_adjustments, offset=False):
+    # Predict and average across models for each quantile directly
+    if offset:
+      predictions = {
+        q: np.mean([model.predict(new_data[FEATURE_NAMES]) for model in models[q]], axis=0) + new_data['offset_volume']
+        for q in QUANTILES
+      }
+    else:
+      predictions = {
+        q: np.mean([model.predict(new_data[FEATURE_NAMES]) for model in models[q]], axis=0)
+      for q in QUANTILES
+      }
+
+    predictions = pd.DataFrame(predictions)
+    # Apply conformal prediction adjustments
+    lower_adjustments = new_data.apply(lambda row: cp_adjustments[(row['site_id'], row['issue_day'])]['lower'], axis=1)
+    upper_adjustments = new_data.apply(lambda row: cp_adjustments[(row['site_id'], row['issue_day'])]['upper'], axis=1)
+
+    predictions[0.1] -= lower_adjustments.values
+    predictions[0.9] += upper_adjustments.values
+    # Post-process predictions if necessary
+    predictions = post_process_quantiles(predictions)
+    return predictions
+```
+
+```{python "Creating date features and reshaping data"}
+year_data = features[(features['forecast_year'] == 2023) &
+                     (features['site_id'] == site_id)]
+year_data = year_data[year_data['day_in_year'] <= issue_date_dt.dayofyear]
+year_predictions = predict_models(models, year_data, results['cutoffs'], offset=True)
+year_predictions['issue_day'] = year_data['issue_day']
+year_predictions['day_in_year'] = year_data['day_in_year']
+year_predictions['issue_date'] = year_data['issue_date']
+year_predictions['issue_day_short'] = pd.to_datetime(year_predictions['issue_date']).apply(lambda x: x.strftime('%-m-%-d'))
+
+year_predictions_melted = year_predictions.melt(id_vars=["day_in_year", 'issue_day'],
+                                                value_vars = [0.1, 0.5, 0.9],
+						var_name="Quantile", value_name="Value")
+reference_data = reference_data.sort_values('volume')
+
+current_predictions = year_predictions.iloc[-1]
+```
+
+```{r "Create the forecast plots"}
+predictions_melted = py$year_predictions_melted
+predictions_melted$Quantile = as.character(predictions_melted$Quantile)
+current_preds = py$current_predictions
+current_preds['0.1'] = as.integer(current_preds['0.1'])
+current_preds['0.5'] = as.integer(current_preds['0.5'])
+current_preds['0.9'] = as.integer(current_preds['0.9'])
+
+forecast_plot = ggplot(predictions_melted, aes_string(x='day_in_year', y='Value')) +
+  geom_line(aes_string(group="Quantile", linetype='Quantile', color='Quantile')) +
+  scale_linetype_manual(values = c('0.9' = 'longdash', '0.5' = 'solid', '0.1' = 'dashed'), guide = "none") +
+  scale_color_manual(values=c('0.9'='black', '0.5'=current_color, '0.1'='black'), guide="none") +
+  scale_x_continuous(name="", breaks=py$year_predictions$day_in_year, 
+                     labels=py$year_predictions$issue_day, 
+                     # extending range by few % to accomodate the labels
+                     limits=c(1, max(py$year_predictions$day_in_year) * 1.15 )) +
+  scale_y_continuous(name="Flow Forecast (KAF)", limits=c(0, max(predictions_melted$Value) * 1.1)) +
+  annotate('label', x = current_preds$day_in_year, y = current_preds[['0.1']], 
+         label = sprintf("10%%: %.0f", current_preds[['0.1']]), hjust = 0, vjust = 1) +
+  annotate('point', x=current_preds$day_in_year, y=current_preds[['0.1']]) +
+  annotate('label', x=current_preds$day_in_year, y=current_preds[['0.5']],
+           label = sprintf("50%%: %.0f", current_preds[['0.5']]), hjust = 0, vjust = 0.5) +
+  annotate('point', x=current_preds$day_in_year, y=current_preds[['0.5']]) +
+  annotate('label', x=current_preds$day_in_year, y=current_preds[['0.9']],
+           label = sprintf("90%%: %.0f", current_preds[['0.9']]), hjust = 0, vjust = 0) +
+  annotate('point', x=current_preds$day_in_year, y=current_preds[['0.9']]) +
+  theme_minimal() +
+  theme10 +
+  theme(axis.text.x=element_text(angle=45, vjust=1, size=9)) +
+  theme(panel.grid.minor.x = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        legend.position='top')
+
+volumes_plot = ggplot(py$reference_data) +
+    geom_boxplot(aes_string(y='volume', x=factor(1)), 
+                 color='black', fill='lightblue') + 
+    scale_y_continuous('volume', limits=c(0, max(predictions_melted$Value))) +
+    scale_x_discrete(name='', breaks=1, labels='volumes\n2004-2022') +
+    theme_void() +
+    theme(axis.text.x= element_text(hjust = 0.5, vjust=-1))
+```
+
+```{r "Arrange forecast plots"}
+#| fig.width: 6
+#| fig.height: 2
+(forecast_plot + plot_spacer() +  volumes_plot) + plot_layout(widths=c(8, -0.5, 1.5))
+```
+
+
+## Comparing forecast conditions to historical conditions (2004 - 2022)
+
+```{r "Define plotting function for context figure"}
+plot_feature_by_date <- function(var_name, var_conditional, title) {
+  date_var <- 'issue_day'
+  py$site_data %>%
+    group_by(!!sym(date_var)) %>%
+    summarise(
+      median = median(!!sym(var_name), na.rm=TRUE),
+      min = min(!!sym(var_name), na.rm=TRUE),
+      max = max(!!sym(var_name), na.rm=TRUE),
+      q25 = quantile(!!sym(var_name), 0.25, na.rm=TRUE),
+      q75 = quantile(!!sym(var_name), 0.75, na.rm=TRUE),
+      day_in_year = mean(day_in_year)
+    ) -> summary_df
+
+  summary_df$day_in_year_corrected <- summary_df$day_in_year - 1
+  py$site_data_current$day_in_year_corrected <- py$site_data_current$day_in_year - 1
+
+  cond_df = data.frame(x=py$conditional_day_in_year, y=py$site_data_current[nrow(py$site_data_current), var_conditional])
+  plot <- ggplot(summary_df, aes(x = day_in_year_corrected)) +
+    geom_line(aes(y = median, group = 1, linetype='historical\nmedian'), color = 'black') +
+    geom_line(aes(y = min, group = 1, linetype='historical\nmin/max'), color = 'black') +
+    geom_line(aes(y = max, group = 1, linetype='historical\nmin/max'), color = 'black') +
+    geom_ribbon(aes(ymin = q25, ymax = q75, group = 1, fill = 'historical\n25-75%'), alpha = 0.5) +
+    scale_fill_manual(name='', values=c('historical\n25-75%'='lightblue')) +
+    scale_linetype_manual(name='', values=c('historical\nmin/max'= 'dotted', 'historical\nmedian'='solid')) +
+    geom_line(data = py$site_data_current, aes(y = !!sym(var_name), group = 1, color='2023'), linewidth=1.3) +
+    scale_color_manual(name='', values=c('2023'=current_color, 'historical\nmin/max'='black', 'historical\nmedian'='black')) +
+    geom_point(data=cond_df, aes(x=x, y=y, shape='feature\ndate'),  size=2) +
+    scale_shape_manual(name='', values=c('feature\ndate'= 17)) +
+    theme_minimal() +
+    theme(panel.grid.minor.x = element_blank(),
+          panel.grid.minor.y = element_blank(),
+          panel.grid.major.y = element_blank(),
+          axis.text.x = element_text(hjust=0),
+	  title.text = element_text(size=12)) + 
+    labs(y = '', x = '', title = title)  +
+	scale_x_continuous(breaks=py$x_axis_dates_df$day_in_year,
+		               labels=py$x_axis_dates_df$month) +
+    theme10
+  return(plot)
+}
+
+p_snotel_swe = plot_feature_by_date('snotel_swe_latest', 'snotel_swe_conditional', 'SNOTEL SWE')
+
+p_swann_swe = plot_feature_by_date('swann_swe_latest', 'swann_swe_conditional', 'SWANN SWE')
+
+p_swann_ppt = plot_feature_by_date('swann_ppt_latest', 'swann_ppt_conditional', 'SWANN PPT')
+
+# since month feature is for issue date, we have to go back here
+month_labels = c('Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun')
+month_labels = c('D', 'J', 'F', 'M', 'A', 'M', 'J')
+p_flow = ggplot(py$site_data, aes(x=month, y=antecedent_flow)) +
+	stat_boxplot(geom='errorbar', aes(group=month), coef=NULL, lty='dotted') +
+	geom_boxplot(aes(group=month), coef=NULL, alpha=1, fill='lightblue') +
+	scale_x_continuous('', limits=c(0.5, 7.5), labels=month_labels, breaks=1:7) +
+	geom_line(data=py$site_data_current, color=current_color, size=1.5, color=current_color, alpha=0.8) +
+	geom_point(data=py$site_data_current[nrow(py$site_data_current),], color=current_color, size=2, shape=17) +
+        theme_minimal() +
+        theme(panel.grid.minor.x = element_blank(),
+              panel.grid.minor.y = element_blank(),
+              panel.grid.major.y = element_blank(),
+              panel.grid.major.x = element_blank()) + 
+        theme10 + 
+	labs(x='', y='', title="Antecedent Flow")
+```
+
+```{r "Arrange plots of historical conditions"}
+#| out.width: 100%
+#| fig.width: 7.2
+#| fig.height: 4
+upper =  (p_snotel_swe + plot_spacer() + p_flow) + plot_layout(widths = c(4, -0.5 ,4))
+lower =  (p_swann_swe + plot_spacer() +  p_swann_ppt) + plot_layout(widths = c(4, -0.5 ,4))
+plt = upper / lower
+plt + plot_layout(guides='collect') & theme(legend.position='right')
+```
+
+
+# Explainability Communication Output 
+
+## Forecast Explanation
+
+```{python "Define prediction wrappers"}
+def predict_wrapper(X, q):
+    X2 = X.copy()
+    X2['site_id'] = site_id
+    X2['site_encoded'] = X2['site_id'].astype(cat_type)
+    X2['day_in_year'] = pd.to_datetime(issue_date).dayofyear
+    X2['issue_day'] = pd.to_datetime(issue_date).strftime('%m-%d')
+    return np.array(predict_models(models, X2, results['cutoffs'])[q].values)
+
+def predict_50(X):
+    return predict_wrapper(X, 0.5)
+
+def predict_interval(X):
+    return predict_wrapper(X, 0.9) - predict_wrapper(X, 0.1)
+```
+
+
+```{python "Define functions for what-if plots"}
+def generate_grid(reference_data, feature, num_points=30):
+    min_val = reference_data[feature].min()
+    max_val = reference_data[feature].max()
+    return np.linspace(min_val, max_val, num_points)
+
+def generate_predictions(pred_fun, current_data, reference_data, shap_features, num_points=30):
+    results = []
+
+    for feature in shap_features:
+        grid = generate_grid(reference_data, feature, num_points)
+        for value in grid:
+            modified_data = current_data.copy()
+            modified_data[feature] = value
+            prediction = pred_fun(modified_data)[0]
+            results.append([feature, value, prediction, 'grid'])
+
+        # Get the prediction for the original current_data
+        original_value = current_data[feature].values[0]
+        prediction = pred_fun(current_data)[0]
+        results.append([feature, original_value, prediction, 'current'])
+
+        # Get the predictions for the reference_data
+        for ref_value in reference_data[feature].unique():
+            modified_data = current_data.copy()
+            modified_data[feature] = ref_value
+            prediction = pred_fun(modified_data)[0]
+            results.append([feature, ref_value, prediction, 'reference'])
+
+    # Create the DataFrame
+    results_df = pd.DataFrame(results, columns=['feature', 'feature_value', 'prediction', 'data_type'])
+
+    return results_df
+
+exclude = ['day_in_year']
+if issue_date == '2023-03-15':
+  exclude.append('swann_ppt_unaccounted')
+
+what_if_features = [feature for feature in SHAP_FEATURES if feature not in exclude]
+results_q50 = generate_predictions(predict_50, current_data, reference_data, what_if_features)
+results_range = generate_predictions(predict_interval, current_data, reference_data, what_if_features)
+```
+
+
+```{r "Create what-if plot"}
+#| fig.width: 7.5
+#| fig.height: 1.5
+results_df <- py$results_q50
+SHAP_FEATURES <- py$SHAP_FEATURES
+reference_data <- py$reference_data
+
+p_whatif_q50 <- ggplot(results_df, aes(x = feature_value, y = prediction)) +
+  geom_line() +
+  geom_point(data = subset(results_df, data_type == "current"), color = current_color, size = 3) +
+  facet_wrap(~ feature, scales = 'free_x', nrow = 1, strip.position='bottom') +
+  labs(x = 'Feature Value', y = 'Prediction') +
+  theme_void() +
+  theme(strip.text = element_text(size=11)) +
+  ggtitle("What-if: How changing individual features changes Q50 forecast")
+p_whatif_q50
+```
+
+```{python "Create data for Shapley value explanations"}
+FEATURE_GROUPS = {'SWE\n(SWANN,SNOTEL)': ['snotel_swe_conditional',
+                                      'swann_swe_conditional'],
+                  'Accumulated\nPPT': ['swann_ppt_conditional'],
+                  'Antecedent\nFlow': ['antecedent_flow'],
+                  'Unaccounted\nPPT': ['swann_ppt_unaccounted'],
+                  "Day in Year": ['day_in_year']}
+
+labels = [
+ "SWE (SWANN=%.0f,\nSNOTEL=%.0f)" % (current_data['swann_swe_conditional'], current_data['snotel_swe_conditional']),
+ "Accumulated\nPPT (=%.0f)" % (current_data['swann_ppt_conditional']),
+ "Antecedent\nFlow (=%.0f)" % (current_data['antecedent_flow']),
+ "Unaccounted\nPPT (=%.0f)" % (current_data['swann_ppt_unaccounted']),
+ "Day in year"
+]
+
+def compute_shapr_waterfall(current_data, ref_data):
+  # dummy prediction function bc shaprpy wants a model
+  def predict_shaprpy(model, X):
+    return predict_50(X)
+  mean_prediction = float(predict_50(ref_data[SHAP_FEATURES]).mean())
+  df_shap, pred_explain, internal, timing, msev = explain(
+    model = {},
+    x_train = ref_data[SHAP_FEATURES],
+    x_explain = current_data[SHAP_FEATURES],
+    approach = 'independence',
+    prediction_zero=mean_prediction,
+    predict_model=predict_shaprpy,
+    group=FEATURE_GROUPS
+    )
+  shap_values = df_shap.iloc[0].tolist()[1:]
+  current_offset = current_data['offset_volume'].values[0]
+  expected_offset = ref_data['offset_volume'].median()
+  df = pd.DataFrame({'shap': np.round(shap_values, 2),
+                     'label': labels})
+  waterfall_data = pd.concat([pd.DataFrame({'shap': [np.round(mean_prediction + expected_offset, 2), np.round(current_offset - expected_offset, 2)], 'label': ['Expected', 'April']}), df])
+  waterfall_data = waterfall_data[waterfall_data['shap'] != 0]
+  waterfall_data = waterfall_data.reset_index().drop('index', axis=1)
+  return waterfall_data, current_offset, expected_offset
+
+waterfall_data, current_offset, expected_offset = compute_shapr_waterfall(current_data, reference_data)
+```
+
+
+<!-- Why is the forecast higher or lower than average? Which predictors or relationships between predictors most strongly influenced the forecast? -->
+
+```{r "Create waterfall plot comparing with histoic conditions"}
+#| fig.height: 2
+#| fig.width: 7
+waterfall_data = py$waterfall_data
+waterfall_data$label[waterfall_data$label == "Expected"] <- "Historical\nForecast"
+p_historic <- waterfall(values=waterfall_data$shap, labels=1:length(waterfall_data$label), calc_total=TRUE, put_rect_text_outside_when_value_below=100, rect_text_size=1.7, total_rect_color=current_color) +
+  scale_x_discrete("", labels=c(waterfall_data$label, '2023\nPrediction')) +
+  scale_y_continuous(limits=c(0, sum(waterfall_data$shap) * 1.25)) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(size=10)) + 
+  ggtitle("SHAP Waterfall: Comparing 2023 Forecast to Expected (2004-2022)") +
+  ylab("Volume in KAF")
+
+if (as.Date(py$issue_date) > as.Date('2023-05-01')){
+  p_historic = p_historic + 
+    annotate('bar', x=1, y=py$expected_offset, width=0.7, fill='grey', linetype='dotted', color='white', alpha=0.3) +
+    annotate('bar', x="Total", y=py$current_offset, width=0.7, fill='grey', linetype='dotted', color='white', alpha=0.3)
+}
+p_historic
+```
+
+<!--## Why did the forecast go up or down since the previous forecast? What change in predictors or relationships between predictors most strongly influenced this change?-->
+
+```{python "Computing Shapley values for previous forecast explanations"}
+before_data = features[((features['site_id'] == site_id) & (features['issue_date'] == date_before))]
+# shaprpy complained so I'm duplicating the before_data which leads to same results for shap
+before_data = pd.concat([before_data, before_data], axis=0)
+waterfall_data_before, current_offset, expected_offset = compute_shapr_waterfall(current_data, before_data)
+```
+
+```{r "Creating waterfall plot for comparison with previous forecast"}
+#| fig.height: 2
+#| fig.width: 7
+shap_df = py$waterfall_data_before
+shap_df$label[shap_df$label == 'Expected'] <- sprintf("%s\nforecast", py$date_before) 
+p_week <- waterfall(values=shap_df$shap, labels=1:length(shap_df$label),
+	  calc_total=TRUE, put_rect_text_outside_when_value_below=100, rect_text_size=2, total_rect_color=current_color) +
+  scale_x_discrete("", labels=c(shap_df$label, sprintf('%s\nforecast', py$issue_date))) +
+  scale_y_continuous(limits=c(0, sum(shap_df$shap) * 1.2)) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(size=10)) + 
+  ggtitle(sprintf("SHAP Waterfall: Comparing %s forecast to %s", py$issue_date, py$date_before)) +
+  ylab("Volume in KAF")
+
+if (py$issue_date == '2023-05-15'){
+  p_week = p_week + 
+    annotate('bar', x=1, y=py$expected_offset, width=0.7, fill='grey', linetype='dotted', color='white', alpha=0.3) +
+    annotate('bar', x="Total", y=py$current_offset, width=0.7, fill='grey', linetype='dotted', color='white', alpha=0.3)
+}
+p_week
+```
+
+<!--Why is the forecast uncertainty range especially high or low? Which predictors or relationships between predictors most strongly influenced the uncertainty? -->
+
+## Uncertainty Explanation
+
+```{r "Create what-if plots for uncertainty explanations"}
+#| fig.width: 7.5
+#| fig.height: 1.5
+results_df <- py$results_range
+SHAP_FEATURES <- py$SHAP_FEATURES
+reference_data <- py$reference_data
+
+p_whatif_range <- ggplot(results_df, aes(x = feature_value, y = prediction)) +
+  geom_line() +
+  geom_point(data = subset(results_df, data_type == "current"), color = current_color, size = 3) +
+  facet_wrap(~ feature, scales = 'free_x', nrow = 1, strip.position='bottom') +
+  labs(x = 'Feature Value', y = 'Prediction') +
+  theme_void() +
+  theme(strip.text = element_text(size=10)) +
+  ggtitle("What-if: How changing individual features affects uncertainy (Q90 - Q10)")
+p_whatif_range
+```
+
+
+```{python "Compute Shapley values for explaining uncertainty"}
+def compute_shapr_waterfall_range(current_data, ref_data):
+  # dummy prediction function bc shaprpy wants a model
+  def predict_shaprpy(model, X):
+    return predict_interval(X)
+  mean_prediction = float(predict_interval(ref_data[SHAP_FEATURES]).mean())
+  df_shap, pred_explain, internal, timing, msev = explain(
+    model = {},
+    x_train = ref_data[SHAP_FEATURES],
+    x_explain = current_data[SHAP_FEATURES],
+    approach = 'independence',
+    prediction_zero=mean_prediction,
+    predict_model=predict_shaprpy,
+    group=FEATURE_GROUPS
+    )
+  shap_values = df_shap.iloc[0].tolist()[1:]
+  current_offset = current_data['offset_volume'].values[0]
+  expected_offset = ref_data['offset_volume'].median()
+  df = pd.DataFrame({'shap': np.round(shap_values, 0),
+                     'label': labels})
+  waterfall_data = pd.concat([pd.DataFrame({'shap': [np.round(mean_prediction + expected_offset)], 'label': ['Expected']}), df])
+  waterfall_data = waterfall_data[waterfall_data['shap'] != 0]
+  waterfall_data = waterfall_data.reset_index().drop('index', axis=1)
+  return waterfall_data, current_offset, expected_offset
+waterfall_data, current_offset, expected_offset = compute_shapr_waterfall(current_data, reference_data)
+
+waterfall_data_range, current_offset, expected_offset = compute_shapr_waterfall_range(current_data, reference_data)
+```
+
+
+```{r "Creating waterfall plot visualizing uncertainty"}
+#| fig.height: 2
+#| fig.width: 7 
+shap_df = py$waterfall_data_range
+shap_df$label[shap_df$label == 'Expected'] <- "Expected\n uncertainty"
+p_waterfall_range <- waterfall(values=shap_df$shap, labels=1:length(shap_df$label),
+	  calc_total=TRUE, put_rect_text_outside_when_value_below=100, rect_text_size=2, total_rect_color=current_color) +
+  scale_x_discrete("", labels=c(shap_df$label, 'Current\n uncertainty', py$issue_date)) +
+  scale_y_continuous(limits=c(0, sum(shap_df$shap) * 1.2)) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(size=10)) + 
+  ggtitle("Comparing 2023 Uncertainty with Expected Uncertainty") +
+  ylab("Q90 - Q10 range")
+p_waterfall_range
+```
+
+# Narrative Analysis
+
+```{python "Printing narrative analysis"}
+#| results: asis
+if site_id=="pueblo_reservoir_inflow" and issue_date=='2023-03-15':
+  narrative_text = """The forecasted flow for the Pueblo Reservoir is 279 KAF, with quantiles at 205 (10%) and 480 (90%). This is in line with expectations, as the mean of historical volumes is 300 KAF. Watershed conditions, including SWE, PPT, and antecedent flow, are generally as expected , with PPT slightly below the median. Recent changes in accumulated precipitation have increased the forecast compared to last week. Uncertainty is slightly lower than expected but remains comparable to typical uncertainty."""
+elif site_id=="pueblo_reservoir_inflow" and issue_date=='2023-05-15':
+  narrative_text = """The forecasted flow for the Pueblo Reservoir is 268 KAF, with quantiles at 193 (10%) and 401 (90%). Recent SWE estimates are above average while accumulated PPT remains slightly below, but there has been some recent PPT. April flow was 14 KAF below average. These factors contribute to a lower forecast. However, recent PPT increases the forecast compared to both historical forecasts and last week's forecast. Uncertainty is slightly lower than usual."""
+elif site_id=="owyhee_r_bl_owyhee_dam" and issue_date=='2023-03-15':
+  narrative_text = """The forecasted flow for Owhyee River (Owyhee Dam) is unusually high at 386 KAF, with quantiles at 225 (10%) and 870 (90%). SWE estimates are at record highs, but antecedent flow in February was low. Snow conditions and accumulated precipitation have contributed to increased flow forecasts, while the below-average antecedent flow decreases it slightly. Substantial PPT and SWE increases last week boosted the forecast. Uncertainty is higher than usual due to the high SWE estimates."""
+elif site_id=="owyhee_r_bl_owyhee_dam" and issue_date=='2023-05-15':
+  narrative_text = """The forecasted flow for Owhyee River (Owyhee Dam) is unusually high at 505 KAF, with quantiles at 439 (10%) and 674 (90%). Unusual amounts of snow have mostly melted, resulting in high flows in March and April. The April flow exceeded typical April flows by 189 KAF. Combined with substantial SWE estimates, the forecasted total flow is very high. Compared to last week, the forecast remains stable. Although the uncertainty is higher than usual due to large SWE estimates, it has decreased substantially since April."""
+else:
+   narrative_text = "placeholder"
+
+print(narrative_text)
+```
