@@ -26,7 +26,7 @@ This competition was held across multiple stages, each with their own prizes:
 
 You can find summaries for the winners of each stage below.
 
-### Hindcast Stage winners
+## Hindcast Stage winners
 
 In [this stage](https://www.drivendata.org/competitions/257/reclamation-water-supply-forecast-hindcast/), solvers made code submissions that ran inference on a hold-out set of 10 years. They also submitted model reports detailing their modeling methodology. Winners were selected by a judging panel based on their quantitative performance and their methodology's rigor.
 
@@ -40,7 +40,7 @@ Code and reports for the Hindcast Stage can be found in the [`hindcast/`](./hind
 
 **Winners Announcement: ["Meet the Winners of the Water Supply Forecast Rodeo Hindcast Stage"](https://drivendata.co/blog/water-supply-hindcast-winners)**
 
-### Forecast Stage winners
+## Forecast Stage winners
 
 In [this stage](https://www.drivendata.org/competitions/259/reclamation-water-supply-forecast/), solvers submitted code submissions that DrivenData then executed on to issue forecasts for the 2024 season on four scheduled issue dates each month from January through July 2024. Winners were selected based on the lowest [averaged mean quantile loss](https://www.drivendata.org/competitions/259/reclamation-water-supply-forecast/page/827/#primary-metric-quantile-loss) of their forecasts.
 
@@ -54,7 +54,7 @@ Code and reports for the Forecast Stage can be found in the [`forecast/`](./fore
 
 **Winners Announcement: _coming soon_**
 
-### Overall Prizes winners
+## Overall Prizes winners
 
 In the [Final Stage](https://www.drivendata.org/competitions/262/reclamation-water-supply-forecast-final/), solvers submitted predictions for a leave-one-out cross-validation over the 20-year period from 2004 through 2023. Additionally, they submitted a final model report detailing their modeling methodology. Winners were selected by a judging panel based on their cross-validation performance, their Forecast Stage performance, and additional criteria including rigor, innovation, generalizability, and efficiency and scalability, and clarity.
 
@@ -70,7 +70,7 @@ Code and reports for the Overall Prize can be found in the [`overall/`](./overal
 
 **Winners Announcement: _coming soon_**
 
-### Explainability and Communication Bonus Track winners
+## Explainability and Communication Bonus Track winners
 
 In [this bonus track](https://www.drivendata.org/competitions/262/reclamation-water-supply-forecast-final/page/880/), solvers developed approaches to explaining and communicating forecasts to water resource managers. Solvers submitted four example forecast summaries—short documents that are representative of publications that a forecast agency would issue—as well as a report detailing their explainability methodology. Winners were selected by a judging panel.
 
