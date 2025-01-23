@@ -52,7 +52,7 @@ Place | Team or User | Score | Summary of Model
 
 Code and reports for the Forecast Stage can be found in the [`forecast/`](./forecast/) subdirectory. For each winner, see the `reports/` subdirectory for their model report and additional solution documentation.
 
-**Winners Announcement: _coming soon_**
+**Winners Announcement: ["Meet the winners of the Forecast and Final Prize Stages of the Water Supply Forecast Rodeo"](https://drivendata.co/blog/water-supply-forecast-and-final-winners)**
 
 ## Overall Prizes winners
 
@@ -68,7 +68,7 @@ Place | Team or User | CV Score | Summary of Model
 
 Code and reports for the Overall Prize can be found in the [`overall/`](./overall/) subdirectory. For each winner, see the `reports/` subdirectory for their model report and additional solution documentation.
 
-**Winners Announcement: _coming soon_**
+**Winners Announcement: ["Meet the winners of the Forecast and Final Prize Stages of the Water Supply Forecast Rodeo"](https://drivendata.co/blog/water-supply-forecast-and-final-winners)**
 
 ## Explainability and Communication Bonus Track winners
 
@@ -84,4 +84,4 @@ Place | Team or User | Summary of Approach
 
 Code and reports for the Explainability Bonus Track can be found in the [`explainability/`](./explainability/) subdirectory. For each winner, see the `reports/` subdirectory for their forecast summaries, methodology report, and additional solution documentation.
 
-**Winners Announcement: _coming soon_**
+**Winners Announcement: ["Meet the winners of the Forecast and Final Prize Stages of the Water Supply Forecast Rodeo"](https://drivendata.co/blog/water-supply-forecast-and-final-winners)**
